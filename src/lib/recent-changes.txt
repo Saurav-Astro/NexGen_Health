@@ -1,0 +1,44 @@
+# Summary of Recent Application Updates
+
+This document outlines the most significant recent changes and fixes applied to the NexGen Health application.
+
+## 1. AI Chatbot and Voice Assistant Overhaul
+
+The AI-powered chat and voice features experienced persistent errors related to invalid model versions and API conflicts. This was a critical issue preventing the chatbot from functioning reliably.
+
+**Root Cause:**
+The application was making calls to Google's Generative AI models using an outdated API version (`v1beta`) that did not support the requested models (like `gemini-1.5-flash-latest`). Sequential AI calls for transcription, response, and speech were also creating multiple points of failure.
+
+**Solution:**
+- **Flow Consolidation:** The `voice-assistant` flow was completely refactored. It now uses a single, powerful model (`gemini-1.5-pro-latest`) to handle both audio transcription and generating a text response in one step. This significantly reduces complexity and errors.
+- **Improved Error Handling:** Robust `try...catch` blocks were added to the AI flows and the chat UI. If the AI service fails for any reason, the user is now shown a clear error message in the chat window instead of a generic "Sorry" message.
+- **Structured AI Prompts:** The text-based `aiSymptomQuery` flow was updated to use `ai.definePrompt` and `ai.defineFlow`. This gives Genkit a clear input/output schema, making the AI's responses more reliable and less prone to failure in a production environment.
+
+## 2. Prescription Tracker Data Persistence
+
+This was the most critical user-facing bug. All medication data entered by a user was lost whenever the page was refreshed.
+
+**Root Cause:**
+The core problem was that the `userId` was not being consistently saved with the prescription data in the Firestore database. When creating a new prescription, the `userId` was missing, and when editing an existing one, the update logic was also failing to include it. Without this ID, the database query could not retrieve the user's data after a refresh.
+
+**Solution:**
+- **Corrected Data Saving Logic:** The `onSubmit` function in the `PrescriptionManager` component was completely rewritten.
+- **Create & Update:** The logic now guarantees that the `userId` is included in the document for **both creating and updating** a prescription.
+- **Simplified Timestamp Handling:** The logic for handling the "last taken" time was simplified to be more robust and prevent invalid data from being sent to Firestore.
+- **Live Data Connection:** The component is now correctly hooked into the live `prescriptions` data feed from Firebase, ensuring that the UI always reflects the persistent state of the database.
+
+## 3. Error Logging for AI Chat
+
+To help with future debugging and monitoring, a new feature was added to log chatbot errors.
+
+**Implementation:**
+- **Firestore Integration:** When the AI chat encounters an error, it now automatically saves a new document to an `errors` collection in Firestore.
+- **Error Details:** This error log includes the user's ID, the query that caused the error, the specific error message, and a timestamp, providing valuable data for developers to diagnose and fix issues.
+
+## 4. Teleconsultation Feature Update
+
+The Teleconsultation page was updated based on user requests.
+
+**Changes:**
+- **New Scheduling Button:** A "Schedule a Meeting" card was added, which links to an external Cal.com URL for booking appointments.
+- **Updated Video Call Link:** The "Launch Video Call" button was updated with a new meeting URL to ensure users are directed to the correct virtual room.
