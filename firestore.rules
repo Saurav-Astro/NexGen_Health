@@ -1,0 +1,156 @@
+/**
+ * @fileoverview Firestore Security Rules for NexGen Health Platform.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model. Each user has a dedicated
+ * data tree under `/users/{userId}`, and only the authenticated user (or an admin)
+ * can access their own data.
+ *
+ * Data Structure:
+ * All user-related data (profile, prescriptions, health logs, alerts, chat logs)
+ * is nested under `/users/{userId}`. This path-based ownership simplifies security rules.
+ *
+ * Key Security Decisions:
+ * - User listing is disabled for privacy.
+ * - The ruleset prioritizes security and simplicity, avoiding complex data validation
+ *   during this prototyping phase. Data validation should be implemented at the
+ *   application level.
+ *
+ * Denormalization for Authorization:
+ * The data structure denormalizes authorization context by utilizing path-based ownership for private data.
+ * The `userId` parameter in each subcollection inherently grants access only to the corresponding user.
+ * This approach avoids hierarchical authorization dependencies and enables atomic operations.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @description Checks if the user is signed in.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Authenticated access is required for most operations.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the request is made by the owner of the resource.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Enforces ownership-based access control.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the request is made by the owner of the resource and the resource exists.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Enforces that updates and deletes can only occur on existing documents.
+     */
+    function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Enforces access control for user profiles.
+     * @path /users/{userId}
+     * @allow (create) - User with UID 'user123' can create a profile at /users/user123 with matching id.
+     * @allow (get) - User with UID 'user123' can read their profile at /users/user123.
+     * @allow (update) - User with UID 'user123' can update their profile at /users/user123.
+     * @allow (delete) - User with UID 'user123' can delete their profile at /users/user123.
+     * @deny (create) - User with UID 'user456' cannot create a profile at /users/user123.
+     * @deny (get) - User with UID 'user456' cannot read the profile at /users/user123.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // User listing is not permitted.
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Enforces access control for user prescriptions.
+     * @path /users/{userId}/prescriptions/{prescriptionId}
+     * @allow (create) - User with UID 'user123' can create a prescription under /users/user123/prescriptions/rx123.
+     * @allow (get) - User with UID 'user123' can read their prescription at /users/user123/prescriptions/rx123.
+     * @allow (update) - User with UID 'user123' can update their prescription at /users/user123/prescriptions/rx123.
+     * @allow (delete) - User with UID 'user123' can delete their prescription at /users/user123/prescriptions/rx123.
+     * @deny (create) - User with UID 'user456' cannot create a prescription under /users/user123/prescriptions/rx123.
+     * @deny (get) - User with UID 'user456' cannot read the prescription at /users/user123/prescriptions/rx123.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId}/prescriptions/{prescriptionId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Enforces access control for user health logs.
+     * @path /users/{userId}/healthLogs/{healthLogId}
+     * @allow (create) - User with UID 'user123' can create a health log under /users/user123/healthLogs/log123.
+     * @allow (get) - User with UID 'user123' can read their health log at /users/user123/healthLogs/log123.
+     * @allow (update) - User with UID 'user123' can update their health log at /users/user123/healthLogs/log123.
+     * @allow (delete) - User with UID 'user123' can delete their health log at /users/user123/healthLogs/log123.
+     * @deny (create) - User with UID 'user456' cannot create a health log under /users/user123/healthLogs/log123.
+     * @deny (get) - User with UID 'user456' cannot read the health log at /users/user123/healthLogs/log123.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId}/healthLogs/{healthLogId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Enforces access control for user alerts.
+     * @path /users/{userId}/alerts/{alertId}
+     * @allow (create) - User with UID 'user123' can create an alert under /users/user123/alerts/alert123.
+     * @allow (get) - User with UID 'user123' can read their alert at /users/user123/alerts/alert123.
+     * @allow (update) - User with UID 'user123' can update their alert at /users/user123/alerts/alert123.
+     * @allow (delete) - User with UID 'user123' can delete their alert at /users/user123/alerts/alert123.
+     * @deny (create) - User with UID 'user456' cannot create an alert under /users/user123/alerts/alert123.
+     * @deny (get) - User with UID 'user456' cannot read the alert at /users/user123/alerts/alert123.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId}/alerts/{alertId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Enforces access control for user chat logs.
+     * @path /users/{userId}/chatLogs/{chatLogId}
+     * @allow (create) - User with UID 'user123' can create a chat log under /users/user123/chatLogs/chat123.
+     * @allow (get) - User with UID 'user123' can read their chat log at /users/user123/chatLogs/chat123.
+     * @allow (update) - User with UID 'user123' can update their chat log at /users/user123/chatLogs/chat123.
+     * @allow (delete) - User with UID 'user123' can delete their chat log at /users/user123/chatLogs/chat123.
+     * @deny (create) - User with UID 'user456' cannot create a chat log under /users/user123/chatLogs/chat123.
+     * @deny (get) - User with UID 'user456' cannot read the chat log at /users/user123/chatLogs/chat123.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId}/chatLogs/{chatLogId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+    }
+  }
+}
