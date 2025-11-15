@@ -1,0 +1,15 @@
+import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
+
+interface GlassCardProps {
+  children: ReactNode;
+  className?: string;
+}
+
+export function GlassCard({ children, className }: GlassCardProps) {
+  return (
+    <div className={cn("glass-container neon-border", className)}>
+      <div className="relative z-10 h-full">{children}</div>
+    </div>
+  );
+}
